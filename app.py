@@ -230,7 +230,7 @@ def admin_import():
             return redirect(url_for('admin_import'))
         try:
             detected, df = read_table(file_bytes, f.filename)
-            mapping, rows = dataframe_to_rows(df)
+            mapping, rows = dataframe_to_rows(df, filename=f.filename)
         except Exception as exc:
             flash(f'File tidak dapat dibaca: {exc}', 'danger')
             return redirect(url_for('admin_import'))
@@ -260,6 +260,8 @@ def admin_import():
             'mapping': mapping,
             'validation': validation,
             'row_count': len(rows),
+            'source_sheet': df.attrs.get('source_sheet', ''),
+            'header_row': df.attrs.get('header_row', 1),
             'preview_rows': rows[:12],
             'rows': rows,
         }

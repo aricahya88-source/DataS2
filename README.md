@@ -418,3 +418,11 @@ SUKA-Share-Peminat-GAS/
 ├── run.sh
 └── README.md
 ```
+
+## Importer Adaptif (v3)
+
+Importer tidak hanya mengandalkan ekstensi file. Ia mendeteksi konten dan mendukung XLS lama, XLSX, XLSM, CSV, TSV, ODS, serta HTML Table yang memakai ekstensi `.xls`.
+
+Versi ini juga menyesuaikan variasi struktur ekspor Admisi, termasuk header seperti `nomor_pendaftar`, `nama_lengkap`, `jalur_masuk`, `nama_pt`, `asal_jurusan`, `pilihan_1`, dan `data_khusus`. Worksheet dan baris header dideteksi otomatis. Jika kolom `jalur_masuk` atau `tahun` kosong, aplikasi mencoba mengambil Jalur dan Tahun dari nama file, misalnya `S2 2021 S2 Jalur Non Tes 1 Gasal.xlsx` akan menghasilkan Tahun `2021` dan Jalur `Non Tes`.
+
+Semua kolom sumber tetap disimpan dalam snapshot `data_json`, sehingga kolom tambahan yang tidak dikenali tidak dibuang dan dapat dipakai pada pengembangan field share berikutnya.
