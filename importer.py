@@ -70,7 +70,8 @@ def _heuristic_header_key(value):
     h = normalize_header(value)
     if not h:
         return None
-    if 'nomor' in h and ('pendaftar' in h or 'pendaftaran' in h or 'registrasi' in h):
+    if (('nomor' in h or h.startswith('no ')) and
+            ('pendaftar' in h or 'pendaftaran' in h or 'registrasi' in h or 'daftar' in h)):
         return 'nomor_pendaftaran'
     if ('nomor' in h or h.startswith('no ')) and ('peserta' in h or 'ujian' in h):
         return 'nomor_peserta'
@@ -181,7 +182,7 @@ def _header_score(values):
     return score
 
 
-def _promote_detected_header(raw_df, max_scan=30):
+def _promote_detected_header(raw_df, max_scan=200):
     """Find the actual header row, allowing title/note rows above the table."""
     if raw_df is None or raw_df.empty:
         raise ValueError('File tidak berisi data tabel.')
@@ -194,7 +195,7 @@ def _promote_detected_header(raw_df, max_scan=30):
     row = raw_df.iloc[best_idx].tolist()
     header_map = map_headers([clean_value(x) for x in row])
     if 'nomor_pendaftaran' not in header_map:
-        raise ValueError('Header tabel tidak dapat dikenali. Kolom Nomor Pendaftaran/Nomor Pendaftar tidak ditemukan pada 30 baris awal.')
+        raise ValueError('Header tabel tidak dapat dikenali. Kolom Nomor Pendaftaran/Nomor Pendaftar belum ditemukan pada baris yang diperiksa.')
     headers = _flatten_columns([clean_value(x) for x in row])
     df = raw_df.iloc[best_idx + 1:].copy()
     df.columns = headers
@@ -213,7 +214,7 @@ def _choose_best_sheet(sheet_map):
     for name, raw in sheet_map.items():
         if raw is None or raw.empty:
             continue
-        scan = min(30, len(raw))
+        scan = min(200, len(raw))
         score = max((_header_score(raw.iloc[i].tolist()) for i in range(scan)), default=-1)
         if best is None or score > best[0]:
             best = (score, name, raw)
@@ -230,6 +231,47 @@ def _decode_text(file_bytes):
             continue
     return file_bytes.decode('utf-8', errors='replace'), 'utf-8-replace'
 
+def _read_openpyxl_sheet_map(file_bytes):
+    """Read XLSX/XLSM without relying on pandas header inference.
+
+    Some Admisi exports are structurally valid Excel files but are produced by
+    different generators. Reading cell values directly through openpyxl makes
+    header discovery deterministic across local and Vercel environments.
+    """
+    try:
+        from openpyxl import load_workbook
+    except ImportError as exc:
+        raise ValueError('Format XLSX/XLSM membutuhkan openpyxl. Pastikan dependency openpyxl terpasang.') from exc
+
+    wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=False)
+    sheet_map = {}
+    for ws in wb.worksheets:
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            rows.append(list(row))
+        if rows:
+            width = max(len(r) for r in rows)
+            rows = [r + [None] * (width - len(r)) for r in rows]
+            sheet_map[ws.title] = pd.DataFrame(rows, dtype=object)
+    return sheet_map
+
+
+def _header_diagnostics(raw_df, limit=8):
+    """Return concise candidate labels for actionable import errors."""
+    if raw_df is None or raw_df.empty:
+        return ''
+    vals = []
+    for i in range(min(5, len(raw_df))):
+        for v in raw_df.iloc[i].tolist():
+            t = clean_value(v)
+            if t and t not in vals:
+                vals.append(t)
+            if len(vals) >= limit:
+                break
+        if len(vals) >= limit:
+            break
+    return ', '.join(vals)
+
 
 def read_table(file_bytes, filename=''):
     """Read many spreadsheet exports by content, then auto-detect sheet and header row."""
@@ -242,7 +284,7 @@ def read_table(file_bytes, filename=''):
         if not tables:
             raise ValueError('Tidak ditemukan tabel HTML di dalam file.')
         # Choose the HTML table with the strongest header signature.
-        scored = [(max((_header_score(t.iloc[i].tolist()) for i in range(min(30, len(t)))), default=-1), i, t)
+        scored = [(max((_header_score(t.iloc[i].tolist()) for i in range(min(200, len(t)))), default=-1), i, t)
                   for i, t in enumerate(tables) if t is not None and not t.empty]
         if not scored:
             raise ValueError('Tidak ditemukan tabel HTML yang berisi data.')
@@ -251,13 +293,21 @@ def read_table(file_bytes, filename=''):
         df = _promote_detected_header(raw_df)
 
     elif detected in ('XLS','XLSX','XLSM','ODS'):
-        engine = {'XLS':'xlrd', 'XLSX':'openpyxl', 'XLSM':'openpyxl', 'ODS':'odf'}[detected]
         try:
-            sheet_map = pd.read_excel(bio, engine=engine, sheet_name=None, header=None, dtype=object)
+            if detected in ('XLSX', 'XLSM'):
+                sheet_map = _read_openpyxl_sheet_map(file_bytes)
+            else:
+                engine = {'XLS':'xlrd', 'ODS':'odf'}[detected]
+                sheet_map = pd.read_excel(bio, engine=engine, sheet_name=None, header=None, dtype=object)
         except ImportError as e:
             raise ValueError(f'Format {detected} membutuhkan dependency pembaca yang tercantum di requirements.txt.') from e
         source_sheet, raw_df = _choose_best_sheet(sheet_map)
-        df = _promote_detected_header(raw_df)
+        try:
+            df = _promote_detected_header(raw_df)
+        except ValueError as exc:
+            sample = _header_diagnostics(raw_df)
+            extra = f' Contoh nilai awal yang terbaca: {sample}' if sample else ''
+            raise ValueError(f'{exc} Format terdeteksi={detected}; sheet={source_sheet}.{extra}') from exc
 
     elif detected in ('CSV','TSV'):
         text, encoding = _decode_text(file_bytes)

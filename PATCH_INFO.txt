@@ -1,0 +1,17 @@
+PATCH IMPORTER HEADER V4 — SUKA Share Peminat
+
+Ganti file importer.py di root repository GitHub dengan file importer.py dari ZIP ini.
+Tidak perlu mengubah Apps Script, Google Sheet, Google Drive, atau Environment Variables.
+
+Perbaikan:
+- XLSX/XLSM dibaca langsung lewat openpyxl agar konsisten di Vercel.
+- Pencarian header diperluas dari 30 menjadi 200 baris.
+- Pencarian dilakukan pada semua worksheet.
+- Alias Nomor Pendaftar/No Pendaftar diperkuat.
+- Error berikutnya akan menyebut format, sheet, dan contoh nilai awal bila header memang belum ditemukan.
+- Tetap mendukung XLS, XLSX, XLSM, CSV, TSV, ODS, dan HTML-XLS.
+
+Diuji terhadap 3 file contoh S2 2021 yang diberikan pengguna:
+- Jalur Tes Tulis
+- Jalur Portofolio
+- Jalur Non Tes
