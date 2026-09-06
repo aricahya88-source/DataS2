@@ -6,6 +6,8 @@ import zipfile
 from collections import Counter
 import pandas as pd
 
+IMPORTER_VERSION = 'header-v5-20260906'
+
 # Canonical fields used by the application.  Source files are allowed to use
 # different labels; map_headers() normalises them to these keys.
 CORE_ALIASES = {
@@ -183,19 +185,40 @@ def _header_score(values):
 
 
 def _promote_detected_header(raw_df, max_scan=200):
-    """Find the actual header row, allowing title/note rows above the table."""
+    """Find the actual header row, allowing title/note rows above the table.
+
+    Fast-path the first rows for known Admisi headers such as nomor_pendaftar,
+    then fall back to scoring up to max_scan rows. This avoids environment-
+    dependent Excel header inference on Vercel.
+    """
     if raw_df is None or raw_df.empty:
-        raise ValueError('File tidak berisi data tabel.')
+        raise ValueError(f'[{IMPORTER_VERSION}] File tidak berisi data tabel.')
+
     scan = min(max_scan, len(raw_df))
-    best_idx, best_score = 0, -1
-    for i in range(scan):
-        score = _header_score(raw_df.iloc[i].tolist())
-        if score > best_score:
-            best_idx, best_score = i, score
+
+    # Fast path: the real Admisi exports normally put the header on row 1.
+    for i in range(min(scan, 10)):
+        vals = [clean_value(x) for x in raw_df.iloc[i].tolist()]
+        hm = map_headers(vals)
+        if 'nomor_pendaftaran' in hm:
+            best_idx = i
+            break
+    else:
+        best_idx, best_score = 0, -1
+        for i in range(scan):
+            score = _header_score(raw_df.iloc[i].tolist())
+            if score > best_score:
+                best_idx, best_score = i, score
+
     row = raw_df.iloc[best_idx].tolist()
     header_map = map_headers([clean_value(x) for x in row])
     if 'nomor_pendaftaran' not in header_map:
-        raise ValueError('Header tabel tidak dapat dikenali. Kolom Nomor Pendaftaran/Nomor Pendaftar belum ditemukan pada baris yang diperiksa.')
+        sample = _header_diagnostics(raw_df, limit=16)
+        raise ValueError(
+            f'[{IMPORTER_VERSION}] Header tabel tidak dapat dikenali. '
+            f'Kolom Nomor Pendaftaran/Nomor Pendaftar tidak ditemukan. '
+            f'Contoh nilai awal yang terbaca: {sample or "(kosong)"}'
+        )
     headers = _flatten_columns([clean_value(x) for x in row])
     df = raw_df.iloc[best_idx + 1:].copy()
     df.columns = headers
