@@ -1,0 +1,5 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Import Data</h1><p>Upload → deteksi format → validasi → preview → konfirmasi.</p></div></div>
+<div class="steps"><span class="step active">1 Upload</span><span class="step">2 Deteksi</span><span class="step">3 Validasi</span><span class="step">4 Preview</span><span class="step">5 Import</span></div>
+<div class="card section-card"><form method="post" enctype="multipart/form-data"><div class="upload-zone"><strong>Pilih file data Admisi</strong><p class="muted">Mendukung XLS lama, XLSX, XLSM, CSV, TSV, ODS, dan file .xls yang sebenarnya HTML Table.</p><input class="input" type="file" name="file" accept=".xls,.xlsx,.xlsm,.csv,.tsv,.ods,.html" required></div><div class="alert alert-info" style="margin-top:16px"><strong>Validasi atomik.</strong> Nomor Pendaftaran wajib unik. Jika ditemukan duplikat di file maupun database, seluruh import ditolak. File sumber/draft dikelola melalui Google Drive.</div><div class="action-row"><button class="btn btn-primary">Baca & Validasi File</button></div></form></div>
+{% endblock %}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <link rel="icon" href="https://admisi.uin-suka.ac.id/img/logo_uin.png">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+{% if current_user %}
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><img class="brand-logo" src="https://admisi.uin-suka.ac.id/img/logo_uin.png" alt="UIN Sunan Kalijaga"><div><strong>SUKA Share</strong><small>Peminat</small></div></div>
+    <div class="nav">
+      {% if current_user.role == 'admin' %}
+      <div class="nav-label">Admin</div>
+      <a href="{{ url_for('admin_dashboard') }}"><span class="nav-dot"></span><span>Dashboard</span></a>
+      <a href="{{ url_for('admin_import') }}"><span class="nav-dot"></span><span>Import Data</span></a>
+      <a href="{{ url_for('admin_import_history') }}"><span class="nav-dot"></span><span>Riwayat Import</span></a>
+      <a href="{{ url_for('admin_users') }}"><span class="nav-dot"></span><span>Pengguna</span></a>
+      {% else %}
+      <div class="nav-label">Program Studi</div>
+      <a href="{{ url_for('prodi_dashboard') }}"><span class="nav-dot"></span><span>Dashboard</span></a>
+      <a href="{{ url_for('prodi_applicants') }}"><span class="nav-dot"></span><span>Data Peminat</span></a>
+      <a href="{{ url_for('share_history') }}"><span class="nav-dot"></span><span>Share Saya</span></a>
+      {% endif %}
+    </div>
+    <div class="sidebar-foot">Flask + Google Apps Script<br>Google Sheets + Google Drive</div>
+  </aside>
+  <main class="main">
+    <header class="topbar"><div><strong>{{ current_user.nama_prodi if current_user.role == 'prodi' and current_user.nama_prodi else 'Administrasi SUKA Share Peminat' }}</strong></div><div class="user"><div class="avatar">{{ current_user.display_name[:1] }}</div><div><strong style="font-size:13px">{{ current_user.display_name }}</strong><div class="small muted">{{ current_user.role|upper }}</div></div><a class="btn btn-secondary btn-sm" href="{{ url_for('logout') }}">Keluar</a></div></header>
+    <div class="content">
+      {% with messages = get_flashed_messages(with_categories=true) %}{% for category,msg in messages %}<div class="alert alert-{{ category }}">{{ msg }}</div>{% endfor %}{% endwith %}
+      {% block content %}{% endblock %}
+      <div class="footer-note">SUKA Share Peminat • Data aplikasi tersimpan di Google Sheets dan arsip import di Google Drive.</div>
+    </div>
+  </main>
+</div>
+{% else %}
+  {% block anonymous %}{% endblock %}
+{% endif %}
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body></html>

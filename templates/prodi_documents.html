@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Detail Data Khusus</h1><p>{{ applicant.nama }} · {{ applicant.nomor_pendaftaran }}</p></div><a class="btn btn-secondary" href="{{ url_for('prodi_applicants') }}">Kembali</a></div>
+<div class="card section-card" style="max-width:900px"><div class="section-title"><h2>{{ docs|length }} dokumen terpisah</h2><span class="badge badge-info">{{ applicant.jalur }}</span></div><div class="doc-list">{% for d in docs %}<div class="doc-row"><div style="flex:1"><div class="doc-title">{{ d.document_name }}</div><div class="small muted">{{ d.document_type or 'Dokumen Khusus' }}</div></div><a class="btn btn-outline btn-sm" href="{{ d.document_url }}" target="_blank" rel="noopener">Buka</a></div>{% else %}<div class="empty">Tidak ada Data Khusus.</div>{% endfor %}</div></div>
+{% endblock %}

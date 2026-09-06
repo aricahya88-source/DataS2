@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Validasi Import</h1><p>Import tidak boleh parsial. Perbaiki file sumber jika terdapat kesalahan.</p></div></div>
+<div class="validation-box fail"><span class="badge badge-danger">VALIDASI GAGAL</span><h2>Import tidak dapat dilanjutkan</h2>{% for x in meta.validation.errors %}<div class="alert alert-danger">{{ x }}</div>{% endfor %}{% for x in meta.validation.warnings %}<div class="alert alert-warning">{{ x }}</div>{% endfor %}<p class="muted">Tidak ada baris yang dimasukkan ke database.</p><a class="btn btn-primary" href="{{ url_for('admin_import') }}">Perbaiki File & Upload Ulang</a></div>
+{% endblock %}

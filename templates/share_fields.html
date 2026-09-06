@@ -1,0 +1,4 @@
+{% extends 'base.html' %}{% block content %}
+<div class="page-head"><div><h1>Pilih Kolom Share</h1><p>{{ count }} pendaftar sudah dipilih. Tentukan informasi apa saja yang boleh terlihat.</p></div></div><div class="progressbar"><span class="done"></span><span class="done"></span><span></span><span></span><span></span></div>
+<form method="post">{% for category,fields in grouped.items() %}<div class="group"><h3>{{ category }}</h3><div class="checkbox-grid">{% for f in fields %}<label class="choice"><input class="check" type="checkbox" name="field_keys" value="{{ f.key }}" {{ 'checked' if f.key in selected else '' }}><span><strong>{{ f.label }}</strong><div class="small muted">{{ f.key }}</div></span></label>{% endfor %}</div></div>{% endfor %}<div class="sticky-actions"><a class="btn btn-secondary" href="{{ url_for('prodi_applicants') }}">Kembali ke Data</a><button class="btn btn-primary">Lanjut Pilih Dokumen</button></div></form>
+{% endblock %}
