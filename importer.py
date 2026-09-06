@@ -477,6 +477,29 @@ def infer_year(*values):
     return years[0] if years else ''
 
 
+def infer_jenjang(*values):
+    """Infer jenjang only for import-time Prodi resolution.
+
+    This value is not stored as an Applicant column.  It helps Apps Script
+    disambiguate master Prodi names that exist at multiple levels, e.g.
+    "Ilmu Syariah" at S2 and S3.
+    """
+    text = ' '.join(clean_value(v) for v in values if clean_value(v))
+    if not text:
+        return ''
+    patterns = [
+        ('D4', r'(?<![A-Z0-9])D4(?![A-Z0-9])|sarjana\s+terapan'),
+        ('S1', r'(?<![A-Z0-9])S1(?![A-Z0-9])|\bsarjana\b'),
+        ('S2', r'(?<![A-Z0-9])S2(?![A-Z0-9])|\bmagister\b'),
+        ('S3', r'(?<![A-Z0-9])S3(?![A-Z0-9])|\bdoktor(?:al)?\b'),
+        ('Profesi', r'\bprofesi\b|\bPPG\b'),
+    ]
+    for label, pattern in patterns:
+        if re.search(pattern, text, re.I):
+            return label
+    return ''
+
+
 def dataframe_to_rows(df, filename=''):
     mapping = map_headers(df.columns)
     if 'nomor_pendaftaran' not in mapping:
@@ -498,6 +521,11 @@ def dataframe_to_rows(df, filename=''):
         # jalur text and filename while preserving the original raw columns.
         if not core.get('tahun'):
             core['tahun'] = infer_year(raw_jalur, filename)
+
+        # Jenjang is a transient import helper used to resolve Prodi names
+        # that occur at more than one level (for example Ilmu Syariah S2/S3).
+        # Older Admisi exports commonly expose it only in the filename.
+        core['jenjang'] = infer_jenjang(filename, core.get('pilihan_1', ''))
 
         core['raw'] = raw
         core['special_documents'] = parse_special_documents(core.get('data_khusus',''))

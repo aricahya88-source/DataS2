@@ -237,7 +237,11 @@ def admin_import():
 
         local_validation = validate_rows(rows, [])
         minimal = [
-            {'nomor_pendaftaran': r.get('nomor_pendaftaran', ''), 'pilihan_1': r.get('pilihan_1', '')}
+            {
+                'nomor_pendaftaran': r.get('nomor_pendaftaran', ''),
+                'pilihan_1': r.get('pilihan_1', ''),
+                'jenjang': r.get('jenjang', ''),
+            }
             for r in rows
         ]
         try:

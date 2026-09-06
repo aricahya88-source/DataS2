@@ -7,7 +7,7 @@
  * setupSukaShareDatabase(). Deploy as Web App: Execute as Me, Who has access: Anyone.
  */
 
-const APP_VERSION = 'gas-sheets-drive-v2-setup';
+const APP_VERSION = 'gas-sheets-drive-v7-prodi-konsentrasi';
 const APP_NAME = 'SUKA Share Peminat';
 
 const SHEETS = {
@@ -464,27 +464,74 @@ function prodiDashboard_(prodiId) {
 }
 
 // ---------- import ----------
-function prodiAliasMap_() {
-  const map={};
+function stripKonsentrasi_(value) {
+  // Admisi can export a parent Prodi together with its concentration, e.g.
+  // "Ilmu Syariah - Konsentrasi Hukum Ekonomi Syariah".
+  // Concentration is NOT a separate Prodi, so resolve the parent first.
+  let text=String(value||'').trim();
+  text=text.replace(/\s*[-–—]\s*konsentrasi\b.*$/i,'').trim();
+  text=text.replace(/\s+\(?konsentrasi\b.*$/i,'').trim();
+  return text;
+}
+function prodiAliasIndex_() {
+  // Keep every candidate.  A flat map silently overwrote equal names that
+  // exist at more than one jenjang (for example Ilmu Syariah S2 and S3).
+  const index={};
   getObjects_('Prodis').filter(p=>bool_(p.active)).forEach(p=>{
     const aliases=String(p.nama_di_excel||'').split('|').concat([p.nama_prodi]);
-    aliases.forEach(a=>{ if(norm_(a)) map[norm_(a)]=p; });
+    aliases.forEach(a=>{
+      const key=norm_(a); if(!key) return;
+      if(!index[key]) index[key]=[];
+      if(!index[key].some(x=>String(x.id)===String(p.id))) index[key].push(p);
+    });
   });
+  return index;
+}
+function resolveProdiChoice_(choice, jenjang) {
+  const index=prodiAliasIndex_(), raw=String(choice||'').trim();
+  const keys=[];
+  const addKey=v=>{const k=norm_(v);if(k&&keys.indexOf(k)<0)keys.push(k);};
+  addKey(raw);
+  addKey(stripKonsentrasi_(raw));
+  let candidates=[];
+  keys.forEach(k=>(index[k]||[]).forEach(p=>{
+    if(!candidates.some(x=>String(x.id)===String(p.id))) candidates.push(p);
+  }));
+  const level=String(jenjang||'').trim().toUpperCase();
+  if(level) {
+    const byLevel=candidates.filter(p=>String(p.jenjang||'').trim().toUpperCase()===level);
+    if(byLevel.length===1) return {prodi:byLevel[0], reason:'matched'};
+    if(byLevel.length>1) return {prodi:null, reason:'ambiguous', candidates:byLevel};
+  }
+  if(candidates.length===1) return {prodi:candidates[0], reason:'matched'};
+  if(candidates.length>1) return {prodi:null, reason:'ambiguous', candidates:candidates};
+  return {prodi:null, reason:'unmapped', candidates:[]};
+}
+function prodiAliasMap_() {
+  // Backward-compatible helper for code outside import.  Exact unique aliases
+  // are returned; import itself uses resolveProdiChoice_().
+  const map={}, index=prodiAliasIndex_();
+  Object.keys(index).forEach(k=>{if(index[k].length===1)map[k]=index[k][0];});
   return map;
 }
 function validateImportRows_(rows) {
   const errors=[], warnings=[], seen={}, existing={};
   getObjects_('Applicants').forEach(a=>existing[String(a.nomor_pendaftaran||'').trim()]=true);
-  const aliases=prodiAliasMap_(); let blankParticipant=0; const dupFile=[], dupDb=[], unmapped=[];
+  let blankParticipant=0; const dupFile=[], dupDb=[], unmapped=[], ambiguous=[];
   (rows||[]).forEach((r,idx)=>{
-    const n=String(r.nomor_pendaftaran||'').trim(), p1=String(r.pilihan_1||'').trim();
+    const n=String(r.nomor_pendaftaran||'').trim(), p1=String(r.pilihan_1||'').trim(), jenjang=String(r.jenjang||'').trim();
     if(!n) errors.push('Nomor Pendaftaran kosong pada baris '+(idx+2)+'.');
     if(n){ if(seen[n]) dupFile.push(n); seen[n]=true; if(existing[n]) dupDb.push(n); }
-    if(!aliases[norm_(p1)]) unmapped.push(p1||'(Pilihan 1 kosong)');
+    const resolved=resolveProdiChoice_(p1,jenjang);
+    if(!resolved.prodi) {
+      if(resolved.reason==='ambiguous') ambiguous.push((p1||'(Pilihan 1 kosong)')+(jenjang?' ['+jenjang+']':''));
+      else unmapped.push(p1||'(Pilihan 1 kosong)');
+    }
   });
   if(dupFile.length) errors.push('Nomor Pendaftaran duplikat di dalam file: '+Array.from(new Set(dupFile)).slice(0,20).join(', '));
   if(dupDb.length) errors.push('Nomor Pendaftaran sudah terdapat di database: '+Array.from(new Set(dupDb)).slice(0,20).join(', '));
   if(unmapped.length) errors.push('Pilihan 1 belum terpetakan ke master Prodi: '+Array.from(new Set(unmapped)).slice(0,20).join(', '));
+  if(ambiguous.length) errors.push('Pilihan 1 cocok ke lebih dari satu jenjang dan belum dapat dipastikan: '+Array.from(new Set(ambiguous)).slice(0,20).join(', ')+'. Pastikan nama file memuat S1/S2/S3/D4 atau Magister/Doktor.');
   return {ok:errors.length===0,errors:errors,warnings:warnings};
 }
 function createImportDraft_(b) {
@@ -513,11 +560,13 @@ function commitImportDraft_(token,userId) {
   try {
     const d=findBy_('ImportDrafts','token',token); if(!d||String(d.created_by)!==String(userId)) throw new Error('Draft import tidak ditemukan.');
     const payload=JSON.parse(DriveApp.getFileById(d.drive_json_file_id).getBlob().getDataAsString('UTF-8')); const rows=payload.rows||[];
-    const minimal=rows.map(r=>({nomor_pendaftaran:r.nomor_pendaftaran,pilihan_1:r.pilihan_1})); const validation=validateImportRows_(minimal);
+    const minimal=rows.map(r=>({nomor_pendaftaran:r.nomor_pendaftaran,pilihan_1:r.pilihan_1,jenjang:r.jenjang||''})); const validation=validateImportRows_(minimal);
     if(!validation.ok){ appendObjects_('Imports',[{id:makeId_('imp'),filename:payload.filename,detected_format:payload.detected_format,total_rows:rows.length,imported_rows:0,status:'Ditolak',validation_message:validation.errors.join(' | '),created_by:userId,created_at:now_(),confirmed_at:now_(),drive_file_id:d.drive_source_file_id||''}]); throw new Error(validation.errors.join(' ')); }
-    const aliases=prodiAliasMap_(), importId=makeId_('imp'), apps=[], docs=[];
+    const importId=makeId_('imp'), apps=[], docs=[];
     rows.forEach(r=>{
-      const p=aliases[norm_(r.pilihan_1)], aid=makeId_('app'), nomorPeserta=String(r.nomor_peserta||'').trim();
+      const resolved=resolveProdiChoice_(r.pilihan_1,r.jenjang||'');
+      if(!resolved.prodi) throw new Error('Pilihan 1 tidak dapat dipetakan saat konfirmasi: '+String(r.pilihan_1||''));
+      const p=resolved.prodi, aid=makeId_('app'), nomorPeserta=String(r.nomor_peserta||'').trim();
       apps.push({id:aid,nomor_pendaftaran:String(r.nomor_pendaftaran||'').trim(),nomor_peserta:nomorPeserta,nama:String(r.nama||'').trim()||'(Tanpa Nama)',email:r.email||'',no_hp:r.no_hp||'',alamat:r.alamat||'',tahun:r.tahun||'',jalur:r.jalur||'',pilihan_1_text:r.pilihan_1||'',prodi_id:p.id,perguruan_tinggi_asal:r.perguruan_tinggi_asal||'',prodi_asal:r.prodi_asal||'',ipk:r.ipk||'',tahun_lulus:r.tahun_lulus||'',status_finalisasi:nomorPeserta?'Sudah Finalisasi':'Belum Finalisasi Kartu',data_json:JSON.stringify(r.raw||{}),import_id:importId,created_at:now_()});
       (r.special_documents||[]).forEach(doc=>docs.push({id:makeId_('doc'),applicant_id:aid,document_type:r.jalur||'',document_name:doc.document_name||'Dokumen',document_url:doc.document_url||'',created_at:now_()}));
     });

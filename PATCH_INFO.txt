@@ -1,19 +1,18 @@
-PATCH Importer Header V6 - 2026-09-06
+PATCH V7 - Mapping Prodi + Konsentrasi
 
 Masalah yang diperbaiki:
-- File .xls yang sebenarnya HTML Table sering memakai <th> pada baris header.
-- pandas.read_html dapat otomatis memindahkan <th> menjadi nama kolom DataFrame.
-- Importer lama lalu memindai baris data dan mengira header hilang.
-- Gejalanya persis: pesan error menampilkan TACHIYYA/... sebagai contoh nilai awal, bukan nama header.
+1. Nilai seperti "Interdisciplinary Islamic Studies - Konsentrasi Psikologi Pendidikan Islam (PsiPI)" sekarang dipetakan ke Prodi S2 Interdisciplinary Islamic Studies.
+2. Nilai seperti "Ilmu Syariah - Konsentrasi Hukum Ekonomi Syariah" sekarang dipetakan ke Prodi induk Ilmu Syariah.
+3. Nama Prodi yang sama pada lebih dari satu jenjang tidak lagi saling menimpa. Importer menginfer jenjang S1/S2/S3/D4/Profesi dari nama file dan Apps Script memakai jenjang itu untuk memilih master Prodi yang benar.
+4. Konsentrasi tetap BUKAN Prodi terpisah.
 
-Perbaikan V6:
-1. Sebelum memindai baris, importer memeriksa df.columns.
-2. Jika df.columns sudah berisi nomor_pendaftar/nomor_pendaftaran, kolom tersebut langsung dipakai sebagai header.
-3. Tetap mendukung header yang berada di baris 1 atau hingga 200 baris pertama.
-4. Pemilihan worksheet/HTML table juga mempertimbangkan header yang sudah dipromosikan reader.
-5. Error diagnostik sekarang menampilkan nama kolom yang dibaca reader.
+FILE GITHUB YANG DIREPLACE:
+- importer.py
+- app.py
 
-File yang diganti di GitHub:
-- importer.py (root repository)
+GOOGLE APPS SCRIPT:
+- copy seluruh apps-script/Code.gs ke editor Apps Script
+- Save
+- Deploy > Manage deployments > Edit > New version > Deploy
 
-Tidak perlu mengubah Apps Script, Google Sheet, Google Drive, atau ENV Vercel.
+Tidak perlu membuat ulang Google Sheet, tidak perlu menghapus data, dan tidak perlu mengubah Environment Variables.
