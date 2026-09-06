@@ -7,7 +7,7 @@
  * setupSukaShareDatabase(). Deploy as Web App: Execute as Me, Who has access: Anyone.
  */
 
-const APP_VERSION = 'gas-sheets-drive-v1';
+const APP_VERSION = 'gas-sheets-drive-v2-setup';
 const APP_NAME = 'SUKA Share Peminat';
 
 const SHEETS = {
@@ -29,6 +29,8 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('SUKA Share Setup')
     .addItem('Setup / Perbaiki Database', 'setupSukaShareDatabase')
     .addItem('Tampilkan API Secret', 'showApiSecret')
+    .addItem('Tampilkan ID & Konfigurasi', 'showSetupInfo')
+    .addItem('Gunakan Folder Drive yang Ada', 'setDriveRootFolder')
     .addItem('Reset Password Admin', 'resetAdminPassword')
     .addSeparator()
     .addItem('Seed Data Demo Fiktif', 'seedDemoApplicants')
@@ -55,7 +57,8 @@ function setupSukaShareDatabase() {
     'Setup selesai.',
     '',
     'Spreadsheet ID: ' + ss.getId(),
-    'Drive root: ' + props.getProperty('ROOT_FOLDER_ID'),
+    'Drive root ID: ' + props.getProperty('ROOT_FOLDER_ID'),
+    'Drive root URL: https://drive.google.com/drive/folders/' + props.getProperty('ROOT_FOLDER_ID'),
     'Admin demo: admin / AdminDemo!2026',
     '',
     'WAJIB: gunakan menu SUKA Share Setup > Reset Password Admin sebelum produksi.',
@@ -70,6 +73,94 @@ function showApiSecret() {
   const message = secret ? ('API_SECRET:\n\n' + secret + '\n\nSimpan sebagai GAS_SECRET di Vercel. Jangan masukkan ke GitHub.') : 'API_SECRET belum dibuat. Jalankan setupSukaShareDatabase().';
   try { SpreadsheetApp.getUi().alert(message); } catch (e) { Logger.log(message); }
   return secret;
+}
+
+
+
+function showSetupInfo() {
+  const props = PropertiesService.getScriptProperties();
+  const ss = getSpreadsheet_();
+  const endpoint = ScriptApp.getService().getUrl() || '(belum dideploy sebagai Web App)';
+  const rootId = props.getProperty('ROOT_FOLDER_ID') || '';
+  const draftId = props.getProperty('DRAFT_FOLDER_ID') || '';
+  const archiveId = props.getProperty('ARCHIVE_FOLDER_ID') || '';
+  const lines = [
+    APP_NAME + ' - Konfigurasi',
+    '',
+    'Spreadsheet ID:',
+    ss.getId(),
+    '',
+    'Spreadsheet URL:',
+    ss.getUrl(),
+    '',
+    'Drive Root Folder ID:',
+    rootId || '(belum dibuat)',
+    '',
+    'Drive Root Folder URL:',
+    rootId ? ('https://drive.google.com/drive/folders/' + rootId) : '(belum dibuat)',
+    '',
+    'Import Drafts Folder ID:',
+    draftId || '(belum dibuat)',
+    '',
+    'Import Archive Folder ID:',
+    archiveId || '(belum dibuat)',
+    '',
+    'Web App URL:',
+    endpoint,
+    '',
+    'Catatan: Spreadsheet ID dan Folder ID disimpan di Script Properties Apps Script.',
+    'Tidak perlu dimasukkan ke GitHub atau Vercel.'
+  ];
+  const message = lines.join('\n');
+  try { SpreadsheetApp.getUi().alert(message); } catch (e) { Logger.log(message); }
+  return {
+    spreadsheet_id: ss.getId(),
+    spreadsheet_url: ss.getUrl(),
+    root_folder_id: rootId,
+    draft_folder_id: draftId,
+    archive_folder_id: archiveId,
+    web_app_url: endpoint
+  };
+}
+
+function setDriveRootFolder() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    'Gunakan Folder Google Drive yang Ada',
+    'Paste URL folder Google Drive atau Folder ID. Folder ini akan menjadi root SUKA Share Peminat. Subfolder Import Drafts dan Import Archive akan dibuat otomatis.',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  const input = String(response.getResponseText() || '').trim();
+  if (!input) {
+    ui.alert('Folder URL/ID tidak boleh kosong.');
+    return;
+  }
+  const id = extractDriveFolderId_(input);
+  let folder;
+  try {
+    folder = DriveApp.getFolderById(id);
+    // Force permission check.
+    folder.getName();
+  } catch (e) {
+    ui.alert('Folder tidak dapat diakses. Pastikan URL/ID benar dan akun Apps Script memiliki akses.');
+    return;
+  }
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('ROOT_FOLDER_ID', id);
+  props.deleteProperty('DRAFT_FOLDER_ID');
+  props.deleteProperty('ARCHIVE_FOLDER_ID');
+  ensureDriveFolders_();
+  ui.alert('Folder Drive root berhasil diatur ke:\n' + folder.getName() + '\n\nID: ' + id + '\n\nSubfolder Import Drafts dan Import Archive sudah dipastikan tersedia.');
+}
+
+function extractDriveFolderId_(input) {
+  const raw = String(input || '').trim();
+  const m = raw.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (m) return m[1];
+  const m2 = raw.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m2) return m2[1];
+  return raw;
 }
 
 function resetAdminPassword() {

@@ -1,5 +1,22 @@
 # SUKA Share Peminat
 
+## Setup cepat Google Sheets + Drive
+
+Tidak perlu membuat sheet, header, Spreadsheet ID, atau folder ID secara manual.
+
+1. Buat satu Google Spreadsheet kosong.
+2. Extensions → Apps Script.
+3. Paste `apps-script/Code.gs`.
+4. Jalankan `setupSukaShareDatabase()`.
+5. Refresh Spreadsheet.
+6. Gunakan menu **SUKA Share Setup → Tampilkan ID & Konfigurasi** untuk melihat Spreadsheet ID, folder Drive, dan Web App URL.
+7. Gunakan **Tampilkan API Secret** untuk nilai `GAS_SECRET`.
+8. Deploy Apps Script sebagai Web App dan masukkan URL `/exec` sebagai `GAS_ENDPOINT` di Vercel.
+
+Spreadsheet ID dan Drive folder ID disimpan otomatis di **Apps Script Script Properties**, bukan di GitHub/Vercel.
+
+Lihat `APPS_SCRIPT_SETUP.md` untuk langkah lengkap.
+
 MVP untuk mengelola data peminat/pendaftar dan membagikan snapshot data secara terkontrol kepada pihak yang menerima link unik.
 
 ## Arsitektur
