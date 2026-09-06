@@ -1,23 +1,19 @@
-PATCH SUKA Share Peminat - Importer Header V5
-Tanggal: 2026-09-06
+PATCH Importer Header V6 - 2026-09-06
 
-Replace HANYA file root repository:
-  importer.py
+Masalah yang diperbaiki:
+- File .xls yang sebenarnya HTML Table sering memakai <th> pada baris header.
+- pandas.read_html dapat otomatis memindahkan <th> menjadi nama kolom DataFrame.
+- Importer lama lalu memindai baris data dan mengira header hilang.
+- Gejalanya persis: pesan error menampilkan TACHIYYA/... sebagai contoh nilai awal, bukan nama header.
 
-Ciri bahwa patch V5 benar-benar aktif:
-Jika import gagal, pesan error akan mengandung marker:
-  [header-v5-20260906]
+Perbaikan V6:
+1. Sebelum memindai baris, importer memeriksa df.columns.
+2. Jika df.columns sudah berisi nomor_pendaftar/nomor_pendaftaran, kolom tersebut langsung dipakai sebagai header.
+3. Tetap mendukung header yang berada di baris 1 atau hingga 200 baris pertama.
+4. Pemilihan worksheet/HTML table juga mempertimbangkan header yang sudah dipromosikan reader.
+5. Error diagnostik sekarang menampilkan nama kolom yang dibaca reader.
 
-Patch ini:
-- mengenali nomor_pendaftar sebagai Nomor Pendaftaran
-- fast-path header pada 10 baris pertama (termasuk baris 1)
-- fallback scan sampai 200 baris
-- membaca XLSX/XLSM langsung via openpyxl
-- memeriksa semua worksheet
-- tetap mendukung XLS, ODS, CSV, TSV, dan HTML-XLS
-- menampilkan contoh nilai yang benar-benar terbaca jika header tetap gagal
+File yang diganti di GitHub:
+- importer.py (root repository)
 
-Sudah diuji dengan 3 file contoh pengguna:
-- Tes Tulis: 47 data, header baris 1
-- Non Tes: 247 data, header baris 1
-- Portofolio: 3 data, header baris 1
+Tidak perlu mengubah Apps Script, Google Sheet, Google Drive, atau ENV Vercel.

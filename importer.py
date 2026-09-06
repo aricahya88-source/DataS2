@@ -6,7 +6,7 @@ import zipfile
 from collections import Counter
 import pandas as pd
 
-IMPORTER_VERSION = 'header-v5-20260906'
+IMPORTER_VERSION = 'header-v6-20260906'
 
 # Canonical fields used by the application.  Source files are allowed to use
 # different labels; map_headers() normalises them to these keys.
@@ -184,6 +184,48 @@ def _header_score(values):
     return score
 
 
+def _columns_header_map(df):
+    """Return canonical header mapping when the reader already promoted row 1.
+
+    This is especially important for legacy Admisi .xls files that are actually
+    HTML tables. pandas.read_html() can promote <th> cells to DataFrame columns
+    even when header=None is requested. In that case row 1 no longer appears in
+    df.iloc[0], so scanning only data rows incorrectly reports that the header is
+    missing.
+    """
+    if df is None:
+        return {}
+    cols = _flatten_columns(df.columns)
+    return map_headers(cols)
+
+
+def _use_existing_columns_if_header(df):
+    """Accept a DataFrame whose column labels already are the real source header."""
+    if df is None or df.empty:
+        return None
+    flattened = _flatten_columns(df.columns)
+    header_map = map_headers(flattened)
+    if 'nomor_pendaftaran' not in header_map:
+        return None
+    out = df.copy()
+    out.columns = flattened
+    out = out.dropna(how='all').fillna('')
+    mask = out.apply(lambda r: any(clean_value(v) for v in r), axis=1)
+    out = out[mask].reset_index(drop=True)
+    # Reader has already consumed/promoted the first source row as header.
+    out.attrs['header_row'] = 1
+    out.attrs['header_source'] = 'reader-columns'
+    return out
+
+
+def _ensure_header(df, max_scan=200):
+    """Handle both possible reader behaviours: header in columns or in row data."""
+    existing = _use_existing_columns_if_header(df)
+    if existing is not None:
+        return existing
+    return _promote_detected_header(df, max_scan=max_scan)
+
+
 def _promote_detected_header(raw_df, max_scan=200):
     """Find the actual header row, allowing title/note rows above the table.
 
@@ -214,9 +256,11 @@ def _promote_detected_header(raw_df, max_scan=200):
     header_map = map_headers([clean_value(x) for x in row])
     if 'nomor_pendaftaran' not in header_map:
         sample = _header_diagnostics(raw_df, limit=16)
+        col_sample = ', '.join(_flatten_columns(raw_df.columns)[:12])
         raise ValueError(
             f'[{IMPORTER_VERSION}] Header tabel tidak dapat dikenali. '
             f'Kolom Nomor Pendaftaran/Nomor Pendaftar tidak ditemukan. '
+            f'Kolom yang dibaca reader: {col_sample or "(kosong)"}. '
             f'Contoh nilai awal yang terbaca: {sample or "(kosong)"}'
         )
     headers = _flatten_columns([clean_value(x) for x in row])
@@ -238,7 +282,10 @@ def _choose_best_sheet(sheet_map):
         if raw is None or raw.empty:
             continue
         scan = min(200, len(raw))
-        score = max((_header_score(raw.iloc[i].tolist()) for i in range(scan)), default=-1)
+        col_map = _columns_header_map(raw)
+        col_score = 1000 if 'nomor_pendaftaran' in col_map else -1
+        row_score = max((_header_score(raw.iloc[i].tolist()) for i in range(scan)), default=-1)
+        score = max(col_score, row_score)
         if best is None or score > best[0]:
             best = (score, name, raw)
     if best is None:
@@ -307,13 +354,21 @@ def read_table(file_bytes, filename=''):
         if not tables:
             raise ValueError('Tidak ditemukan tabel HTML di dalam file.')
         # Choose the HTML table with the strongest header signature.
-        scored = [(max((_header_score(t.iloc[i].tolist()) for i in range(min(200, len(t)))), default=-1), i, t)
-                  for i, t in enumerate(tables) if t is not None and not t.empty]
+        scored = []
+        for i, t in enumerate(tables):
+            if t is None or t.empty:
+                continue
+            # Some HTML-XLS exports use <th>; pandas may already have promoted
+            # those cells to t.columns. Give such a table the strongest score.
+            col_map = _columns_header_map(t)
+            col_score = 1000 if 'nomor_pendaftaran' in col_map else -1
+            row_score = max((_header_score(t.iloc[j].tolist()) for j in range(min(200, len(t)))), default=-1)
+            scored.append((max(col_score, row_score), i, t))
         if not scored:
             raise ValueError('Tidak ditemukan tabel HTML yang berisi data.')
         _, idx, raw_df = max(scored, key=lambda x: x[0])
         source_sheet = f'HTML Table {idx + 1}'
-        df = _promote_detected_header(raw_df)
+        df = _ensure_header(raw_df)
 
     elif detected in ('XLS','XLSX','XLSM','ODS'):
         try:
@@ -326,7 +381,7 @@ def read_table(file_bytes, filename=''):
             raise ValueError(f'Format {detected} membutuhkan dependency pembaca yang tercantum di requirements.txt.') from e
         source_sheet, raw_df = _choose_best_sheet(sheet_map)
         try:
-            df = _promote_detected_header(raw_df)
+            df = _ensure_header(raw_df)
         except ValueError as exc:
             sample = _header_diagnostics(raw_df)
             extra = f' Contoh nilai awal yang terbaca: {sample}' if sample else ''
@@ -344,7 +399,7 @@ def read_table(file_bytes, filename=''):
                 sep = ','
         raw_df = pd.read_csv(io.StringIO(text), sep=sep, dtype=str, header=None, engine='python')
         source_sheet = f'Text ({encoding})'
-        df = _promote_detected_header(raw_df)
+        df = _ensure_header(raw_df)
 
     else:
         raise ValueError(f'Format file belum dikenali/didukung: {detected}')
